@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GAGE R&R 계산기</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #1f2a37;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --line: #d1d5db;
+      --ok: #0f766e;
+      --warn: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans KR", "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    h1 { margin-top: 0; font-size: 1.7rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    input[type="number"] {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 1rem;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      background: var(--primary);
+      color: #fff;
+      transition: opacity 0.15s;
+    }
+    button.secondary {
+      background: #475569;
+    }
+    button:hover { opacity: 0.9; }
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 6px;
+      text-align: center;
+    }
+    th { background: #e5e7eb; }
+    td.meta { background: #f8fafc; font-weight: 600; }
+    td input {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 6px;
+      text-align: right;
+    }
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .result-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #f8fafc;
+    }
+    .value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .status.ok { color: var(--ok); }
+    .status.warn { color: var(--warn); }
+    .help {
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    @media (max-width: 850px) {
+      .grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      .result-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="card">
+      <h1>GAGE R&amp;R (교차형, Average &amp; Range 방식)</h1>
+      <p class="help">측정자 수 × 부품 수 × 반복 수 구조로 데이터를 입력하고 장비/측정시스템의 변동성을 계산합니다.</p>
+      <div class="grid">
+        <label>측정자 수 (A)
+          <input id="appraisers" type="number" min="2" max="10" value="3" />
+        </label>
+        <label>부품 수 (P)
+          <input id="parts" type="number" min="2" max="30" value="10" />
+        </label>
+        <label>반복 수 (R)
+          <input id="trials" type="number" min="2" max="10" value="2" />
+        </label>
+        <label>공차 (Tolerance)
+          <input id="tolerance" type="number" min="0" step="any" value="1.0" />
+        </label>
+      </div>
+      <div class="actions">
+        <button id="buildBtn">입력표 생성</button>
+        <button id="fillBtn" class="secondary">샘플 데이터 채우기</button>
+        <button id="calcBtn">계산하기</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>측정 데이터</h2>
+      <div id="tableWrap"></div>
+      <p class="help">행 하나는 [측정자, 부품] 조합입니다. Trial 칸에 반복 측정값을 입력하세요.</p>
+    </section>
+
+    <section class="card">
+      <h2>결과</h2>
+      <div class="result-grid" id="resultWrap">
+        <div class="result-box"><div>반복성 (EV, 6σ)</div><div class="value" id="ev6">-</div></div>
+        <div class="result-box"><div>재현성 (AV, 6σ)</div><div class="value" id="av6">-</div></div>
+        <div class="result-box"><div>총 Gage R&amp;R (GRR, 6σ)</div><div class="value" id="grr6">-</div></div>
+        <div class="result-box"><div>부품 간 변동 (PV, 6σ)</div><div class="value" id="pv6">-</div></div>
+        <div class="result-box"><div>총 변동 (TV, 6σ)</div><div class="value" id="tv6">-</div></div>
+        <div class="result-box"><div>%GRR (TV 기준)</div><div class="value" id="pctGrr">-</div><div id="judge" class="status"></div></div>
+      </div>
+      <p class="help" id="extra"></p>
+    </section>
+  </main>
+
+  <script>
+    const d2Map = {2: 1.128, 3: 1.693, 4: 2.059, 5: 2.326, 6: 2.534, 7: 2.704, 8: 2.847, 9: 2.97, 10: 3.078};
+
+    const appraisersEl = document.getElementById('appraisers');
+    const partsEl = document.getElementById('parts');
+    const trialsEl = document.getElementById('trials');
+    const toleranceEl = document.getElementById('tolerance');
+
+    const tableWrap = document.getElementById('tableWrap');
+    const buildBtn = document.getElementById('buildBtn');
+    const fillBtn = document.getElementById('fillBtn');
+    const calcBtn = document.getElementById('calcBtn');
+
+    function clampInt(v, min, max) {
+      const n = Math.trunc(Number(v));
+      return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
+    }
+
+    function currentShape() {
+      const a = clampInt(appraisersEl.value, 2, 10);
+      const p = clampInt(partsEl.value, 2, 30);
+      const r = clampInt(trialsEl.value, 2, 10);
+      appraisersEl.value = a;
+      partsEl.value = p;
+      trialsEl.value = r;
+      return { a, p, r };
+    }
+
+    function buildTable() {
+      const { a, p, r } = currentShape();
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headRow = document.createElement('tr');
+      ['측정자', '부품', ...Array.from({ length: r }, (_, i) => `Trial ${i + 1}`)].forEach((h) => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      for (let ai = 1; ai <= a; ai++) {
+        for (let pi = 1; pi <= p; pi++) {
+          const tr = document.createElement('tr');
+          tr.dataset.appraiser = ai;
+          tr.dataset.part = pi;
+
+          const aCell = document.createElement('td');
+          aCell.className = 'meta';
+          aCell.textContent = `A${ai}`;
+          tr.appendChild(aCell);
+
+          const pCell = document.createElement('td');
+          pCell.className = 'meta';
+          pCell.textContent = `P${pi}`;
+          tr.appendChild(pCell);
+
+          for (let ri = 1; ri <= r; ri++) {
+            const td = document.createElement('td');
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.step = 'any';
+            input.dataset.trial = ri;
+            input.placeholder = '0.000';
+            td.appendChild(input);
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+      }
+
+      table.appendChild(tbody);
+      tableWrap.innerHTML = '';
+      tableWrap.appendChild(table);
+    }
+
+    function fillSampleData() {
+      const rows = tableWrap.querySelectorAll('tbody tr');
+      if (!rows.length) return;
+
+      rows.forEach((row) => {
+        const ai = Number(row.dataset.appraiser);
+        const pi = Number(row.dataset.part);
+        const inputs = row.querySelectorAll('input');
+        const partBase = 40 + pi * 0.5;
+        const appraiserBias = (ai - 2) * 0.08;
+        inputs.forEach((input, idx) => {
+          const repeatNoise = (Math.random() - 0.5) * 0.12;
+          const trialTrend = idx * 0.01;
+          const value = partBase + appraiserBias + repeatNoise + trialTrend;
+          input.value = value.toFixed(3);
+        });
+      });
+    }
+
+    function readData() {
+      const { a, p, r } = currentShape();
+      const rows = Array.from(tableWrap.querySelectorAll('tbody tr'));
+      if (rows.length !== a * p) {
+        throw new Error('입력표를 먼저 생성해주세요.');
+      }
+
+      const data = Array.from({ length: a }, () => Array.from({ length: p }, () => []));
+
+      for (const row of rows) {
+        const ai = Number(row.dataset.appraiser) - 1;
+        const pi = Number(row.dataset.part) - 1;
+        const vals = Array.from(row.querySelectorAll('input')).map((inp) => Number(inp.value));
+        if (vals.some((v) => !Number.isFinite(v))) {
+          throw new Error('모든 측정값을 숫자로 입력하세요.');
+        }
+        if (vals.length !== r) {
+          throw new Error('Trial 개수가 맞지 않습니다.');
+        }
+        data[ai][pi] = vals;
+      }
+
+      return { data, a, p, r };
+    }
+
+    function mean(arr) {
+      return arr.reduce((s, v) => s + v, 0) / arr.length;
+    }
+
+    function range(arr) {
+      return Math.max(...arr) - Math.min(...arr);
+    }
+
+    function calcGRR() {
+      const { data, a, p, r } = readData();
+      if (!d2Map[r] || !d2Map[p]) {
+        throw new Error('현재 d2 상수는 반복수/부품수 2~10 범위에서 지원됩니다.');
+      }
+
+      const cellMeans = Array.from({ length: a }, (_, ai) =>
+        Array.from({ length: p }, (_, pi) => mean(data[ai][pi]))
+      );
+
+      const cellRanges = Array.from({ length: a }, (_, ai) =>
+        Array.from({ length: p }, (_, pi) => range(data[ai][pi]))
+      );
+
+      const rBar = mean(cellRanges.flat());
+      const sigmaEV = rBar / d2Map[r];
+
+      const appraiserMeans = cellMeans.map((row) => mean(row));
+      const rangeAppraiserMeans = range(appraiserMeans);
+      const sigmaAppraiser = rangeAppraiserMeans / d2Map[a];
+      const sigmaAV = Math.sqrt(Math.max(sigmaAppraiser ** 2 - sigmaEV ** 2 / (p * r), 0));
+
+      const partMeans = Array.from({ length: p }, (_, pi) => mean(Array.from({ length: a }, (_, ai) => cellMeans[ai][pi])));
+      const rangePartMeans = range(partMeans);
+      const sigmaPV = rangePartMeans / d2Map[p];
+
+      const sigmaGRR = Math.sqrt(sigmaEV ** 2 + sigmaAV ** 2);
+      const sigmaTV = Math.sqrt(sigmaGRR ** 2 + sigmaPV ** 2);
+
+      const ev6 = 6 * sigmaEV;
+      const av6 = 6 * sigmaAV;
+      const grr6 = 6 * sigmaGRR;
+      const pv6 = 6 * sigmaPV;
+      const tv6 = 6 * sigmaTV;
+
+      const pctGRR = tv6 > 0 ? (grr6 / tv6) * 100 : 0;
+      const ndc = sigmaGRR > 0 ? 1.41 * (sigmaPV / sigmaGRR) : 0;
+
+      const tol = Number(toleranceEl.value);
+      const pctTol = Number.isFinite(tol) && tol > 0 ? (grr6 / tol) * 100 : null;
+
+      return { ev6, av6, grr6, pv6, tv6, pctGRR, pctTol, ndc };
+    }
+
+    function judgment(pctGRR) {
+      if (pctGRR < 10) return { text: '우수 (측정시스템 적합)', cls: 'ok' };
+      if (pctGRR <= 30) return { text: '조건부 허용 (개선 권장)', cls: 'warn' };
+      return { text: '부적합 (측정시스템 개선 필요)', cls: 'warn' };
+    }
+
+    function format(v, digits = 4) {
+      return Number.isFinite(v) ? v.toFixed(digits) : '-';
+    }
+
+    function renderResult(res) {
+      document.getElementById('ev6').textContent = format(res.ev6);
+      document.getElementById('av6').textContent = format(res.av6);
+      document.getElementById('grr6').textContent = format(res.grr6);
+      document.getElementById('pv6').textContent = format(res.pv6);
+      document.getElementById('tv6').textContent = format(res.tv6);
+      document.getElementById('pctGrr').textContent = `${format(res.pctGRR, 2)} %`;
+
+      const j = judgment(res.pctGRR);
+      const judgeEl = document.getElementById('judge');
+      judgeEl.textContent = j.text;
+      judgeEl.className = `status ${j.cls}`;
+
+      const extra = [];
+      extra.push(`NDC(고유범주수): ${format(res.ndc, 2)} (일반적으로 5 이상 권장)`);
+      if (res.pctTol !== null) {
+        extra.push(`%Tolerance: ${format(res.pctTol, 2)} %`);
+      }
+      document.getElementById('extra').textContent = extra.join(' | ');
+    }
+
+    buildBtn.addEventListener('click', buildTable);
+    fillBtn.addEventListener('click', fillSampleData);
+    calcBtn.addEventListener('click', () => {
+      try {
+        const result = calcGRR();
+        renderResult(result);
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    buildTable();
+  </script>
+</body>
+</html>
