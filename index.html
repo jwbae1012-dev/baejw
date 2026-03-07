@@ -157,7 +157,7 @@
     <section class="card">
       <h2>측정 데이터</h2>
       <div id="tableWrap"></div>
-      <p class="help">행 하나는 [측정자, 부품] 조합입니다. Trial 칸에 반복 측정값을 입력하세요.</p>
+      <p class="help">요청 형식으로 [측정자 | 부품 | 반복 | 데이터] 행 단위 입력입니다. 행 순서는 부품 → 반복 → 측정자입니다.</p>
     </section>
 
     <section class="card">
@@ -218,7 +218,7 @@
       const table = document.createElement('table');
       const thead = document.createElement('thead');
       const headRow = document.createElement('tr');
-      ['측정자', '부품', ...Array.from({ length: r }, (_, i) => `Trial ${i + 1}`)].forEach((h) => {
+      ['측정자', '부품', '반복', '데이터'].forEach((h) => {
         const th = document.createElement('th');
         th.textContent = h;
         headRow.appendChild(th);
@@ -227,33 +227,40 @@
       table.appendChild(thead);
 
       const tbody = document.createElement('tbody');
-      for (let ai = 1; ai <= a; ai++) {
-        for (let pi = 1; pi <= p; pi++) {
-          const tr = document.createElement('tr');
-          tr.dataset.appraiser = ai;
-          tr.dataset.part = pi;
 
-          const aCell = document.createElement('td');
-          aCell.className = 'meta';
-          aCell.textContent = appraiserNames[ai - 1];
-          tr.appendChild(aCell);
+      for (let pi = 1; pi <= p; pi++) {
+        for (let ri = 1; ri <= r; ri++) {
+          for (let ai = 1; ai <= a; ai++) {
+            const tr = document.createElement('tr');
+            tr.dataset.appraiser = ai;
+            tr.dataset.part = pi;
+            tr.dataset.trial = ri;
 
-          const pCell = document.createElement('td');
-          pCell.className = 'meta';
-          pCell.textContent = `P${pi}`;
-          tr.appendChild(pCell);
+            const aCell = document.createElement('td');
+            aCell.className = 'meta';
+            aCell.textContent = appraiserNames[ai - 1];
+            tr.appendChild(aCell);
 
-          for (let ri = 1; ri <= r; ri++) {
-            const td = document.createElement('td');
+            const pCell = document.createElement('td');
+            pCell.className = 'meta';
+            pCell.textContent = String(pi);
+            tr.appendChild(pCell);
+
+            const rCell = document.createElement('td');
+            rCell.className = 'meta';
+            rCell.textContent = String(ri);
+            tr.appendChild(rCell);
+
+            const dataCell = document.createElement('td');
             const input = document.createElement('input');
             input.type = 'number';
             input.step = 'any';
-            input.dataset.trial = ri;
             input.placeholder = '0.000';
-            td.appendChild(input);
-            tr.appendChild(td);
+            dataCell.appendChild(input);
+            tr.appendChild(dataCell);
+
+            tbody.appendChild(tr);
           }
-          tbody.appendChild(tr);
         }
       }
 
@@ -269,38 +276,38 @@
       rows.forEach((row) => {
         const ai = Number(row.dataset.appraiser);
         const pi = Number(row.dataset.part);
-        const inputs = row.querySelectorAll('input');
+        const ri = Number(row.dataset.trial);
+        const input = row.querySelector('input');
+
         const partBase = 40 + pi * 0.5;
         const appraiserBias = (ai - 2) * 0.08;
-        inputs.forEach((input, idx) => {
-          const repeatNoise = (Math.random() - 0.5) * 0.12;
-          const trialTrend = idx * 0.01;
-          const value = partBase + appraiserBias + repeatNoise + trialTrend;
-          input.value = value.toFixed(3);
-        });
+        const repeatNoise = (Math.random() - 0.5) * 0.12;
+        const trialTrend = (ri - 1) * 0.01;
+        const value = partBase + appraiserBias + repeatNoise + trialTrend;
+        input.value = value.toFixed(3);
       });
     }
 
     function readData() {
       const { a, p, r } = currentShape();
       const rows = Array.from(tableWrap.querySelectorAll('tbody tr'));
-      if (rows.length !== a * p) {
+      if (rows.length !== a * p * r) {
         throw new Error('입력표를 먼저 생성해주세요.');
       }
 
-      const data = Array.from({ length: a }, () => Array.from({ length: p }, () => []));
+      const data = Array.from({ length: a }, () => Array.from({ length: p }, () => Array(r).fill(null)));
 
       for (const row of rows) {
         const ai = Number(row.dataset.appraiser) - 1;
         const pi = Number(row.dataset.part) - 1;
-        const vals = Array.from(row.querySelectorAll('input')).map((inp) => Number(inp.value));
-        if (vals.some((v) => !Number.isFinite(v))) {
+        const ri = Number(row.dataset.trial) - 1;
+        const value = Number(row.querySelector('input').value);
+
+        if (!Number.isFinite(value)) {
           throw new Error('모든 측정값을 숫자로 입력하세요.');
         }
-        if (vals.length !== r) {
-          throw new Error('Trial 개수가 맞지 않습니다.');
-        }
-        data[ai][pi] = vals;
+
+        data[ai][pi][ri] = value;
       }
 
       return { data, a, p, r };
@@ -316,8 +323,8 @@
 
     function calcGRR() {
       const { data, a, p, r } = readData();
-      if (!d2Map[r] || !d2Map[p]) {
-        throw new Error('현재 d2 상수는 반복수/부품수 2~10 범위에서 지원됩니다.');
+      if (!d2Map[r] || !d2Map[p] || !d2Map[a]) {
+        throw new Error('현재 d2 상수는 측정자/반복수/부품수 2~10 범위에서 지원됩니다.');
       }
 
       const cellMeans = Array.from({ length: a }, (_, ai) =>
