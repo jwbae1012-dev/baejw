@@ -157,7 +157,7 @@
     <section class="card">
       <h2>측정 데이터</h2>
       <div id="tableWrap"></div>
-      <p class="help">요청 형식으로 [측정자 | 부품 | 반복 | 데이터] 행 단위 입력입니다. 행 순서는 부품 → 반복 → 측정자입니다.</p>
+      <p class="help">요청 형식으로 [측정자 | 부품 | 반복 | 데이터] 행 단위 입력입니다. 행 순서는 측정자 → 부품 → 반복입니다.</p>
     </section>
 
     <section class="card">
@@ -228,9 +228,9 @@
 
       const tbody = document.createElement('tbody');
 
-      for (let pi = 1; pi <= p; pi++) {
-        for (let ri = 1; ri <= r; ri++) {
-          for (let ai = 1; ai <= a; ai++) {
+      for (let ai = 1; ai <= a; ai++) {
+        for (let pi = 1; pi <= p; pi++) {
+          for (let ri = 1; ri <= r; ri++) {
             const tr = document.createElement('tr');
             tr.dataset.appraiser = ai;
             tr.dataset.part = pi;
