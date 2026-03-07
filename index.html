@@ -49,7 +49,8 @@
       font-size: 0.95rem;
       color: var(--muted);
     }
-    input[type="number"] {
+    input[type="number"],
+    input[type="text"] {
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 10px;
@@ -143,6 +144,9 @@
           <input id="tolerance" type="number" min="0" step="any" value="1.0" />
         </label>
       </div>
+      <label style="margin-top: 10px;">측정자 이름 (쉼표로 구분)
+        <input id="appraiserNames" type="text" value="홍길동, 김영희, 박민수" placeholder="예: 홍길동, 김영희, 박민수" />
+      </label>
       <div class="actions">
         <button id="buildBtn">입력표 생성</button>
         <button id="fillBtn" class="secondary">샘플 데이터 채우기</button>
@@ -177,6 +181,7 @@
     const partsEl = document.getElementById('parts');
     const trialsEl = document.getElementById('trials');
     const toleranceEl = document.getElementById('tolerance');
+    const appraiserNamesEl = document.getElementById('appraiserNames');
 
     const tableWrap = document.getElementById('tableWrap');
     const buildBtn = document.getElementById('buildBtn');
@@ -198,8 +203,18 @@
       return { a, p, r };
     }
 
+    function resolveAppraiserNames(a) {
+      const raw = appraiserNamesEl.value || '';
+      const parsed = raw.split(',').map((name) => name.trim()).filter(Boolean);
+      const names = Array.from({ length: a }, (_, idx) => parsed[idx] || `A${idx + 1}`);
+      appraiserNamesEl.value = names.join(', ');
+      return names;
+    }
+
     function buildTable() {
       const { a, p, r } = currentShape();
+      const appraiserNames = resolveAppraiserNames(a);
+
       const table = document.createElement('table');
       const thead = document.createElement('thead');
       const headRow = document.createElement('tr');
@@ -220,7 +235,7 @@
 
           const aCell = document.createElement('td');
           aCell.className = 'meta';
-          aCell.textContent = `A${ai}`;
+          aCell.textContent = appraiserNames[ai - 1];
           tr.appendChild(aCell);
 
           const pCell = document.createElement('td');
